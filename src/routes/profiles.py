@@ -1,8 +1,7 @@
 import os
-from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, Form
 from fastapi import status
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,16 +26,11 @@ router = APIRouter()
 )
 async def create_user_profile(
     user_id: int,
+    profile_data: Annotated[ProfileCreateRequestSchema, Form()],
     db: Annotated[AsyncSession, Depends(get_db)],
     token: Annotated[str, Depends(get_token)],
     jwt_manager: Annotated[JWTAuthManagerInterface, Depends(get_jwt_auth_manager)],
     s3_client: Annotated[S3StorageInterface, Depends(get_s3_storage_client)],
-    first_name: str = Form(...),
-    last_name: str = Form(...),
-    gender: str = Form(...),
-    date_of_birth: date = Form(...),
-    info: str = Form(...),
-    avatar: UploadFile = File(...),
 ) -> ProfileCreateResponseSchema:
     try:
         try:
@@ -79,9 +73,9 @@ async def create_user_profile(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User already has a profile."
             )
-        _, extension = os.path.splitext(avatar.filename)
+        _, extension = os.path.splitext(profile_data.avatar.filename)
         avatar_path = f"avatars/{user_id}_avatar{extension}"
-        file = await avatar.read()
+        file = await profile_data.avatar.read()
         try:
             await s3_client.upload_file(avatar_path, file)
             avatar_url = await s3_client.get_file_url(avatar_path)
@@ -91,11 +85,11 @@ async def create_user_profile(
                 detail="Failed to upload avatar. Please try again later."
             )
         profile = UserProfileModel(
-            first_name=first_name,
-            last_name=last_name,
-            gender=gender,
-            date_of_birth=date_of_birth,
-            info=info,
+            first_name=profile_data.first_name,
+            last_name=profile_data.last_name,
+            gender=profile_data.gender,
+            date_of_birth=profile_data.date_of_birth,
+            info=profile_data.info,
             avatar=avatar_path,
             user=user_for_profile,
         )
